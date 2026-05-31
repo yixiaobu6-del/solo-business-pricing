@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一人公司定价决策器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+    <nav class="bg-amber-700 text-white p-4 shadow-lg">
+        <div class="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-2">
+            <h1 class="text-xl font-bold"><i class="fa fa-tags mr-2"></i>一人公司定价决策器</h1>
+            <div class="flex flex-wrap gap-2 text-sm">
+                <button onclick="showPricingTab('basic')" class="pricing-tab-btn px-3 py-1 rounded bg-amber-500"><i class="fa fa-calculator"></i> 基础定价</button>
+                <button onclick="showPricingTab('sensitivity')" class="pricing-tab-btn px-3 py-1 rounded hover:bg-amber-500"><i class="fa fa-line-chart"></i> 敏感度分析</button>
+                <button onclick="showPricingTab('bundle')" class="pricing-tab-btn px-3 py-1 rounded hover:bg-amber-500"><i class="fa fa-cubes"></i> 组合定价</button>
+                <button onclick="exportReport()" class="bg-white text-amber-700 px-3 py-1 rounded hover:bg-amber-100"><i class="fa fa-download mr-1"></i>导出报告</button>
+            </div>
+        </div>
+    </nav>
+    <div class="max-w-6xl mx-auto p-4">
+        <!-- ====== 基础定价 Tab ====== -->
+        <div id="pricing-tab-basic" class="pricing-tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-bold mb-4"><i class="fa fa-sliders mr-2 text-amber-600"></i>输入参数</h3>
+                <div class="space-y-4">
+                    <div><label class="block text-sm text-gray-600 mb-1">产品成本 (¥)</label><input type="number" id="cost" class="w-full border rounded p-2" value="50" oninput="autoSaveAndCalc()"></div>
+                    <div><label class="block text-sm text-gray-600 mb-1">期望利润率 (%)</label><input type="range" id="profitMargin" min="5" max="80" value="30" oninput="document.getElementById('profitVal').textContent=this.value+'%';autoSaveAndCalc()" class="w-full"><div class="text-right text-sm text-gray-500"><span id="profitVal">30%</span></div></div>
+                    <div><label class="block text-sm text-gray-600 mb-1">竞品最低价 (¥)</label><input type="number" id="compLow" class="w-full border rounded p-2" value="80" oninput="autoSaveAndCalc()"></div>
+                    <div><label class="block text-sm text-gray-600 mb-1">竞品最高价 (¥)</label><input type="number" id="compHigh" class="w-full border rounded p-2" value="200" oninput="autoSaveAndCalc()"></div>
+                    <div><label class="block text-sm text-gray-600 mb-1">目标用户付费意愿 (1-10)</label><input type="range" id="willingness" min="1" max="10" value="6" oninput="document.getElementById('willVal').textContent=this.value;autoSaveAndCalc()" class="w-full"><div class="text-right text-sm text-gray-500"><span id="willVal">6</span>/10</div></div>
+                    <div><label class="block text-sm text-gray-600 mb-1">产品类型</label><select id="productType" onchange="autoSaveAndCalc()" class="w-full border rounded p-2"><option value="digital">数字产品</option><option value="physical">实物产品</option><option value="service">服务</option><option value="subscription">订阅制</option></select></div>
+                    <div class="text-xs text-gray-400"><i class="fa fa-info-circle mr-1"></i>所有参数自动保存至本地</div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-6">
+                <h3 class="font-bold mb-4"><i class="fa fa-lightbulb-o mr-2 text-amber-600"></i>建议价格区间</h3>
+                <div id="priceResult" class="text-center py-6">
+                    <div class="text-4xl font-bold text-amber-600 mb-2" id="suggestedPrice">¥65 - ¥150</div>
+                    <div class="text-sm text-gray-500">建议售价区间</div>
+                </div>
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-bold mb-3"><i class="fa fa-flag mr-2 text-amber-600"></i>推荐定价策略</h4>
+                    <div id="strategyResult" class="space-y-2"></div>
+                </div>
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-bold mb-3"><i class="fa fa-book mr-2 text-amber-600"></i>心理学依据</h4>
+                    <div id="psychologyResult" class="text-sm text-gray-600 space-y-2"></div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6 mb-6">
+            <h3 class="font-bold mb-4"><i class="fa fa-bar-chart mr-2 text-amber-600"></i>定价区间对比</h3>
+            <canvas id="priceChart" height="200"></canvas>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="font-bold mb-4"><i class="fa fa-history mr-2 text-amber-600"></i>历史定价方案</h3>
+            <div class="mb-3 flex flex-wrap gap-2">
+                <button onclick="savePlan()" class="bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700"><i class="fa fa-save mr-1"></i>保存当前方案</button>
+                <button onclick="exportReport()" class="bg-indigo-500 text-white px-4 py-2 rounded text-sm hover:bg-indigo-600"><i class="fa fa-download mr-1"></i>导出定价报告</button>
+                <button onclick="clearPlans()" class="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600"><i class="fa fa-trash mr-1"></i>清空</button>
+            </div>
+            <div id="planList" class="space-y-2"></div>
+        </div><!-- /pricing-tab-basic -->
+
+        <!-- ====== 敏感度分析 Tab ====== -->
+        <div id="pricing-tab-sensitivity" class="pricing-tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="font-bold mb-4"><i class="fa fa-sliders text-amber-600"></i> 价格敏感度模拟</h3>
+                    <div class="space-y-4">
+                        <div><label class="block text-sm text-gray-600 mb-1">基准价格 (¥)</label>
+                            <input type="number" id="sensBasePrice" class="w-full border rounded p-2" value="100" oninput="runSensitivity()"></div>
+                        <div><label class="block text-sm text-gray-600 mb-1">单位变动成本 (¥)</label>
+                            <input type="number" id="sensVarCost" class="w-full border rounded p-2" value="40" oninput="runSensitivity()"></div>
+                        <div><label class="block text-sm text-gray-600 mb-1">固定成本 (¥/月)</label>
+                            <input type="number" id="sensFixedCost" class="w-full border rounded p-2" value="5000" oninput="runSensitivity()"></div>
+                        <div><label class="block text-sm text-gray-600 mb-1">预估月销量 (基准价时)</label>
+                            <input type="number" id="sensSales" class="w-full border rounded p-2" value="200" oninput="runSensitivity()"></div>
+                        <div><label class="block text-sm text-gray-600 mb-1">价格弹性系数</label>
+                            <input type="range" id="sensElasticity" min="0.1" max="2.0" value="0.8" step="0.1" oninput="document.getElementById('sensElasticityVal').textContent=this.value;runSensitivity()" class="w-full">
+                            <div class="text-right text-sm text-gray-500"><span id="sensElasticityVal">0.8</span>（&gt;1 = 弹性大）</div>
+                        </div>
+                        <button onclick="syncSensitivityFromBasic()" class="bg-amber-100 text-amber-700 px-3 py-1 rounded text-sm hover:bg-amber-200"><i class="fa fa-arrow-right"></i> 从基础定价同步参数</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="font-bold mb-4"><i class="fa fa-lightbulb-o text-amber-600"></i> 分析结论</h3>
+                    <div id="sensConclusion" class="space-y-3 text-sm text-gray-600"><div class="text-center text-gray-400 py-8">调整参数后查看分析</div></div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-6 mb-6">
+                <h3 class="font-bold mb-4"><i class="fa fa-line-chart text-amber-600"></i> 价格-利润敏感度曲线</h3>
+                <canvas id="sensChart" height="250"></canvas>
+                <div class="mt-4 grid grid-cols-3 gap-4 text-center text-sm">
+                    <div class="bg-green-50 rounded p-3"><div class="text-gray-500">最优价格</div><div id="sensOptimalPrice" class="text-xl font-bold text-green-600">-</div></div>
+                    <div class="bg-blue-50 rounded p-3"><div class="text-gray-500">最优利润/月</div><div id="sensOptimalProfit" class="text-xl font-bold text-blue-600">-</div></div>
+                    <div class="bg-red-50 rounded p-3"><div class="text-gray-500">保本销量</div><div id="sensBreakEven" class="text-xl font-bold text-red-600">-</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== 组合定价 Tab ====== -->
+        <div id="pricing-tab-bundle" class="pricing-tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="font-bold mb-4"><i class="fa fa-cubes text-amber-600"></i> 多产品组合定价</h3>
+                    <p class="text-xs text-gray-500 mb-3">添加你的产品/服务，系统自动计算捆绑定价和分层定价建议</p>
+                    <div id="bundleProductList" class="space-y-2 mb-4"></div>
+                    <button onclick="addBundleProduct()" class="bg-amber-500 text-white px-3 py-1 rounded text-sm hover:bg-amber-600"><i class="fa fa-plus"></i> 添加产品</button>
+                    <button onclick="calcBundle()" class="bg-indigo-600 text-white px-3 py-1 rounded text-sm hover:bg-indigo-700 ml-2"><i class="fa fa-calculator"></i> 计算组合定价</button>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="font-bold mb-4"><i class="fa fa-tags text-amber-600"></i> 捆绑方案建议</h3>
+                    <div id="bundleResult" class="space-y-3"></div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow p-6 mb-6">
+                <h3 class="font-bold mb-4"><i class="fa fa-layer-group text-amber-600"></i> 订阅分层定价建议</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="tierPricingCards"></div>
+                <div class="mt-4 text-xs text-gray-500"><i class="fa fa-info-circle"></i> 三层定价利用"金发女孩效应"引导用户选择中间档（专业版）。建议基础版覆盖成本，专业版贡献主要利润，企业版凸显专业版价值。</div>
+            </div>
+        </div>
+
+        <!-- ====== 历史定价方案 ====== -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="font-bold mb-4"><i class="fa fa-history mr-2 text-amber-600"></i>历史定价方案</h3>
+            <div class="mb-3 flex flex-wrap gap-2">
+                <button onclick="savePlan()" class="bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700"><i class="fa fa-save mr-1"></i>保存当前方案</button>
+                <button onclick="exportReport()" class="bg-indigo-500 text-white px-4 py-2 rounded text-sm hover:bg-indigo-600"><i class="fa fa-download mr-1"></i>导出定价报告</button>
+                <button onclick="clearPlans()" class="bg-red-500 text-white px-4 py-2 rounded text-sm hover:bg-red-600"><i class="fa fa-trash mr-1"></i>清空</button>
+            </div>
+            <div id="planList" class="space-y-2"></div>
+        </div>
+    </div>
+    <script>
+        let plans = JSON.parse(localStorage.getItem('pricePlans') || '[]');
+        let chartInstance, sensChartInstance;
+        let bundleProducts = JSON.parse(localStorage.getItem('bundleProducts') || '[]');
+        let bundleProductIdCounter = bundleProducts.length > 0 ? Math.max(...bundleProducts.map(p => p.id)) + 1 : 1;
+
+        // ============== Tab切换 ==============
+        function showPricingTab(name) {
+            document.querySelectorAll('.pricing-tab-content').forEach(t => t.classList.add('hidden'));
+            document.querySelectorAll('.pricing-tab-btn').forEach(b => {
+                b.className = 'pricing-tab-btn px-3 py-1 rounded hover:bg-amber-500';
+            });
+            const idx = ['basic','sensitivity','bundle'].indexOf(name);
+            document.querySelectorAll('.pricing-tab-btn')[idx].className = 'pricing-tab-btn px-3 py-1 rounded bg-amber-500';
+            document.getElementById('pricing-tab-'+name).classList.remove('hidden');
+            if (name === 'sensitivity') runSensitivity();
+            if (name === 'bundle') renderBundleProducts();
+        }
+
+        // --- 自动保存输入参数 ---
+        function autoSaveAndCalc() {
+            const data = {
+                cost: document.getElementById('cost').value,
+                margin: document.getElementById('profitMargin').value,
+                compLow: document.getElementById('compLow').value,
+                compHigh: document.getElementById('compHigh').value,
+                willingness: document.getElementById('willingness').value,
+                type: document.getElementById('productType').value
+            };
+            localStorage.setItem('pricingInputs', JSON.stringify(data));
+            calculate();
+        }
+
+        function loadSavedInputs() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('pricingInputs'));
+                if (saved) {
+                    if (saved.cost) document.getElementById('cost').value = saved.cost;
+                    if (saved.margin) { document.getElementById('profitMargin').value = saved.margin; document.getElementById('profitVal').textContent = saved.margin + '%'; }
+                    if (saved.compLow) document.getElementById('compLow').value = saved.compLow;
+                    if (saved.compHigh) document.getElementById('compHigh').value = saved.compHigh;
+                    if (saved.willingness) { document.getElementById('willingness').value = saved.willingness; document.getElementById('willVal').textContent = saved.willingness; }
+                    if (saved.type) document.getElementById('productType').value = saved.type;
+                }
+            } catch(e) {}
+        }
+
+        function calculate() {
+            const cost = parseFloat(document.getElementById('cost').value) || 0;
+            const margin = parseFloat(document.getElementById('profitMargin').value) / 100;
+            const compLow = parseFloat(document.getElementById('compLow').value) || 0;
+            const compHigh = parseFloat(document.getElementById('compHigh').value) || 0;
+            const willingness = parseInt(document.getElementById('willingness').value);
+            const type = document.getElementById('productType').value;
+
+            const costPrice = cost / (1 - margin);
+            const compMid = (compLow + compHigh) / 2;
+            const valueFactor = willingness / 10;
+            const valuePrice = costPrice * (1 + valueFactor);
+
+            const lowPrice = Math.min(costPrice, compLow > 0 ? compLow : costPrice);
+            const highPrice = Math.max(valuePrice, compHigh > 0 ? compHigh : valuePrice);
+            const suggestedLow = Math.round(Math.max(costPrice, lowPrice));
+            const suggestedHigh = Math.round(Math.max(costPrice * 1.3, highPrice * 0.8));
+
+            document.getElementById('suggestedPrice').textContent = '¥' + suggestedLow + ' - ¥' + suggestedHigh;
+
+            const strategies = recommendation(type, cost, suggestedLow, suggestedHigh, compMid, willingness);
+            document.getElementById('strategyResult').innerHTML = strategies.map(s => `<div class="flex items-start gap-2 bg-amber-50 p-3 rounded"><i class="fa fa-check-circle text-amber-600 mt-1"></i><div><div class="font-medium">${s.name}</div><div class="text-sm text-gray-600">${s.desc}</div></div></div>`).join('');
+
+            const psych = getPsychology(type, suggestedLow, suggestedHigh, cost);
+            document.getElementById('psychologyResult').innerHTML = psych.map(p => `<div class="flex items-start gap-2 bg-gray-50 p-3 rounded"><i class="fa fa-graduation-cap text-amber-600 mt-1"></i><div><div class="font-medium">${p.name}</div><div class="text-sm">${p.desc}</div></div></div>`).join('');
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(document.getElementById('priceChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['成本价', '成本+利润', '竞品均价', '价值定价', '建议最低', '建议最高'],
+                    datasets: [{ label: '价格 (¥)', data: [cost, Math.round(costPrice), Math.round(compMid), Math.round(valuePrice), suggestedLow, suggestedHigh], backgroundColor: ['#9ca3af', '#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'] }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function recommendation(type, cost, low, high, compMid, will) {
+            const recs = [];
+            if (will >= 7) recs.push({ name: '撇脂定价策略 (Skimming)', desc: `用户付费意愿高 (${will}/10)，建议以¥${high}高价入市，针对早期采用者获取最大利润，后续逐步降价覆盖大众市场。` });
+            if (will <= 5) recs.push({ name: '渗透定价策略 (Penetration)', desc: `用户付费意愿较低 (${will}/10)，建议以¥${low}低价快速获客，用规模效应降低成本，后续通过增值服务盈利。` });
+            if (type === 'digital') recs.push({ name: '价值定价策略 (Value-based)', desc: `数字产品边际成本低，建议基于用户感知价值定价¥${high}，强调功能差异化和独特价值主张。` });
+            if (type === 'subscription') recs.push({ name: '分层定价策略 (Tiered)', desc: `订阅制产品建议设置3个层级：基础版¥${low}/月、专业版¥${Math.round(high * 0.7)}/月、企业版¥${high}/月，利用"金发女孩效应"引导用户选择中间档。` });
+            if (type === 'service') recs.push({ name: '基于价值定价', desc: `服务类产品定价应反映你的时间和专业价值。建议起步价¥${low}/次，根据项目复杂度上浮。` });
+            recs.push({ name: '心理定价技巧', desc: `尾数定价：将¥${high}设为¥${Math.round(high/10)*10-1}或¥${Math.round(high/10)*10-0.9}，利用左位数效应。` });
+            return recs.slice(0, 3);
+        }
+
+        function getPsychology(type, low, high, cost) {
+            return [
+                { name: '锚定效应 (Anchoring)', desc: '先展示竞品高价¥' + (high * 1.5).toFixed(0) + '，再展示你的价格¥' + high + '，让用户感觉"赚到了"。' },
+                { name: '左位数效应 (Left-Digit Effect)', desc: '¥99比¥100的心理差异远大于1元。建议将¥' + high + '设为¥' + (Math.floor(high/10)*10-1) + '。' },
+                { name: '对比原理 (Contrast Principle)', desc: '同时展示基础版(¥' + (Math.round(cost * 1.2)) + ')和高级版(¥' + (high * 2) + ')，让目标版本显得更划算。' },
+                { name: '损失厌恶 (Loss Aversion)', desc: '强调"限时优惠"或"早鸟价"，制造错过即损失的紧迫感，促进决策。' }
+            ];
+        }
+
+        function savePlan() {
+            const suggested = document.getElementById('suggestedPrice').textContent;
+            plans.unshift({ id: Date.now(), cost: document.getElementById('cost').value, margin: document.getElementById('profitMargin').value, low: document.getElementById('compLow').value, high: document.getElementById('compHigh').value, will: document.getElementById('willingness').value, type: document.getElementById('productType').value, suggested, date: new Date().toLocaleDateString() });
+            localStorage.setItem('pricePlans', JSON.stringify(plans));
+            renderPlans();
+            showToast('方案已保存');
+        }
+
+        function deletePlan(id) { plans = plans.filter(p => p.id !== id); localStorage.setItem('pricePlans', JSON.stringify(plans)); renderPlans(); }
+        function clearPlans() { if (confirm('确定清空所有记录？')) { plans = []; localStorage.setItem('pricePlans', JSON.stringify(plans)); renderPlans(); } }
+
+        function renderPlans() {
+            const list = document.getElementById('planList');
+            list.innerHTML = plans.map(p => `<div class="flex justify-between items-center p-3 bg-gray-50 rounded hover:bg-gray-100">
+                <div><div class="font-medium">${p.type} | 成本¥${p.cost} | 建议${p.suggested}</div><div class="text-xs text-gray-500">${p.date}</div></div>
+                <button onclick="deletePlan(${p.id})" class="text-red-400 hover:text-red-600"><i class="fa fa-trash"></i></button>
+            </div>`).join('') || '<div class="text-center text-gray-400 py-8">暂无保存方案</div>';
+        }
+
+        // --- 导出定价报告 ---
+        function exportReport() {
+            const suggested = document.getElementById('suggestedPrice').textContent;
+            const cost = document.getElementById('cost').value;
+            const margin = document.getElementById('profitMargin').value;
+            const will = document.getElementById('willingness').value;
+            const type = document.getElementById('productType').value;
+
+            let md = `# 定价决策报告\n\n`;
+            md += `**生成日期：** ${new Date().toLocaleDateString('zh-CN')}\n\n`;
+            md += `## 输入参数\n\n`;
+            md += `- **产品成本：** ¥${cost}\n`;
+            md += `- **期望利润率：** ${margin}%\n`;
+            md += `- **用户付费意愿：** ${will}/10\n`;
+            md += `- **产品类型：** ${type}\n\n`;
+            md += `## 建议售价\n\n**${suggested}**\n\n`;
+            md += `## 推荐策略\n\n`;
+            const strategiesEl = document.getElementById('strategyResult');
+            strategiesEl.querySelectorAll('.font-medium').forEach(s => { md += `- ${s.textContent}\n`; });
+            md += `\n## 心理学依据\n\n`;
+            const psychEl = document.getElementById('psychologyResult');
+            psychEl.querySelectorAll('.font-medium').forEach(p => { md += `- ${p.textContent}\n`; });
+            md += `\n---\n> 由一人公司定价决策器自动生成\n`;
+
+            copyToClipboard(md);
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `定价报告_${new Date().toISOString().slice(0, 10)}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('定价报告已复制并下载');
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+            } else { fallbackCopy(text); }
+        }
+
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+        }
+
+        function showToast(msg) {
+            const el = document.getElementById('toast') || (() => {
+                const t = document.createElement('div');
+                t.id = 'toast';
+                t.className = 'fixed bottom-6 right-6 bg-gray-800 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 transition-all duration-300';
+                document.body.appendChild(t); return t;
+            })();
+            el.textContent = msg; el.classList.remove('hidden', 'opacity-0'); el.classList.add('opacity-100');
+            clearTimeout(el._timer);
+            el._timer = setTimeout(() => { el.classList.add('opacity-0'); setTimeout(() => el.classList.add('hidden'), 300); }, 2500);
+        }
+
+        // ============== 敏感度分析 ==============
+        function runSensitivity() {
+            const basePrice = parseFloat(document.getElementById('sensBasePrice').value) || 100;
+            const varCost = parseFloat(document.getElementById('sensVarCost').value) || 40;
+            const fixedCost = parseFloat(document.getElementById('sensFixedCost').value) || 5000;
+            const baseSales = parseFloat(document.getElementById('sensSales').value) || 200;
+            const elasticity = parseFloat(document.getElementById('sensElasticity').value) || 0.8;
+
+            const pricePoints = [];
+            const profitPoints = [];
+            const salesPoints = [];
+            for (let priceMult = 0.5; priceMult <= 1.8; priceMult += 0.05) {
+                const price = Math.round(basePrice * priceMult);
+                const priceChangeRatio = (price - basePrice) / basePrice;
+                const salesChangeRatio = priceChangeRatio * (-elasticity);
+                const sales = Math.max(0, Math.round(baseSales * (1 + salesChangeRatio)));
+                const profit = sales * (price - varCost) - fixedCost;
+                pricePoints.push(price);
+                profitPoints.push(Math.round(profit));
+                salesPoints.push(sales);
+            }
+
+            if (sensChartInstance) sensChartInstance.destroy();
+            const ctx = document.getElementById('sensChart').getContext('2d');
+            sensChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: pricePoints,
+                    datasets: [
+                        { label: '月利润 (¥)', data: profitPoints, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.2)', fill: true, tension: 0.4, yAxisID: 'y' },
+                        { label: '预估销量', data: salesPoints, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: false, tension: 0.4, yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        x: { title: { display: true, text: '价格 (¥)' } },
+                        y: { type: 'linear', position: 'left', title: { display: true, text: '月利润 (¥)' }, beginAtZero: true },
+                        y1: { type: 'linear', position: 'right', title: { display: true, text: '销量' }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+
+            const maxProfit = Math.max(...profitPoints);
+            const maxIdx = profitPoints.indexOf(maxProfit);
+            const optimalPrice = pricePoints[maxIdx];
+            const optimalSales = salesPoints[maxIdx];
+            const breakEvenPrice = pricePoints.find(p => profitPoints[pricePoints.indexOf(p)] >= 0) || '-';
+            const breakEvenSales = (fixedCost / (basePrice - varCost)) || 0;
+
+            document.getElementById('sensOptimalPrice').textContent = '¥' + optimalPrice;
+            document.getElementById('sensOptimalProfit').textContent = '¥' + maxProfit.toLocaleString();
+            document.getElementById('sensBreakEven').textContent = Math.ceil(breakEvenSales) + '件';
+
+            let conclusion = '';
+            if (elasticity < 0.5) {
+                conclusion = '产品弹性低，用户对价格不敏感。涨价对销量影响小，建议适当提价获取更高利润。';
+            } else if (elasticity > 1.2) {
+                conclusion = '产品弹性高，用户对价格敏感。降价可显著提升销量，薄利多销策略可能更优。';
+            } else {
+                conclusion = '产品弹性适中，价格变动对销量有一定影响。建议维持在当前价格附近，关注竞品动态。';
+            }
+            document.getElementById('sensConclusion').innerHTML = `
+                <div class="p-3 bg-amber-50 rounded"><strong>弹性分析：</strong> ${conclusion}</div>
+                <div class="p-3 bg-green-50 rounded"><strong>最优价格建议：</strong> ¥${optimalPrice} 时可获得最大月利润 ¥${maxProfit.toLocaleString()}（销量约${optimalSales}件）</div>
+                <div class="p-3 bg-blue-50 rounded"><strong>保本分析：</strong> 当前定价 ¥${basePrice} 需销售 ${Math.ceil(breakEvenSales)} 件/月才能保本。若降价至 ¥${breakEvenPrice}，销量需达 ${salesPoints[pricePoints.indexOf(breakEvenPrice)] || '-'} 件。</div>
+                <div class="p-3 bg-purple-50 rounded"><strong>风险提示：</strong> ${elasticity > 1 ? '降价虽有销量增长，但需确保产能和成本控制。' : '涨价需注意用户流失风险，建议配合增值服务。'}</div>
+            `;
+        }
+
+        function syncSensitivityFromBasic() {
+            const cost = parseFloat(document.getElementById('cost').value) || 50;
+            const suggestedText = document.getElementById('suggestedPrice').textContent;
+            const suggested = parseFloat(suggestedText.match(/\d+/g)?.[0] || 100);
+            document.getElementById('sensBasePrice').value = suggested;
+            document.getElementById('sensVarCost').value = cost;
+            runSensitivity();
+            showToast('已同步参数');
+        }
+
+        // ============== 组合定价 ==============
+        function addBundleProduct() {
+            const id = bundleProductIdCounter++;
+            bundleProducts.push({ id, name: '产品'+id, price: 100, cost: 40, demand_share: 20 });
+            saveBundle();
+            renderBundleProducts();
+        }
+
+        function saveBundle() {
+            localStorage.setItem('bundleProducts', JSON.stringify(bundleProducts));
+        }
+
+        function renderBundleProducts() {
+            const list = document.getElementById('bundleProductList');
+            if (bundleProducts.length === 0) {
+                list.innerHTML = '<div class="text-center text-gray-400 py-4">暂无产品，点击添加</div>';
+                calcBundle(); return;
+            }
+            list.innerHTML = bundleProducts.map(p => `
+                <div class="flex flex-wrap gap-2 items-center p-2 bg-gray-50 rounded">
+                    <input type="text" value="${p.name}" onchange="updateBundleProp(${p.id},'name',this.value)" class="border rounded px-2 py-1 w-20" placeholder="名称">
+                    <input type="number" value="${p.price}" onchange="updateBundleProp(${p.id},'price',this.value)" class="border rounded px-2 py-1 w-16 text-sm" placeholder="单价">
+                    <input type="number" value="${p.cost}" onchange="updateBundleProp(${p.id},'cost',this.value)" class="border rounded px-2 py-1 w-16 text-sm" placeholder="成本">
+                    <button onclick="removeBundleProduct(${p.id})" class="text-red-400 hover:text-red-600 p-1"><i class="fa fa-trash"></i></button>
+                </div>
+            `).join('');
+            calcBundle();
+        }
+
+        function updateBundleProp(id, prop, value) {
+            const p = bundleProducts.find(x => x.id === id);
+            if (!p) return;
+            p[prop] = prop === 'name' ? value : parseFloat(value) || 0;
+            saveBundle(); calcBundle();
+        }
+
+        function removeBundleProduct(id) {
+            bundleProducts = bundleProducts.filter(p => p.id !== id);
+            saveBundle(); renderBundleProducts();
+        }
+
+        function calcBundle() {
+            const resDiv = document.getElementById('bundleResult');
+            const tierDiv = document.getElementById('tierPricingCards');
+            if (bundleProducts.length === 0) {
+                resDiv.innerHTML = '<div class="text-gray-400 text-center py-4">添加产品后自动计算</div>';
+                tierDiv.innerHTML = ''; return;
+            }
+
+            const totalPrice = bundleProducts.reduce((s,p) => s + parseFloat(p.price || 0), 0);
+            const totalCost = bundleProducts.reduce((s,p) => s + parseFloat(p.cost || 0), 0);
+            const bundlePrice = Math.round(totalPrice * 0.85); // 15% discount for bundle
+            const bundleProfit = bundlePrice - totalCost;
+
+            resDiv.innerHTML = `
+                <div class="p-4 bg-amber-50 rounded-lg"><div class="font-medium">单品总价</div><div class="text-2xl font-bold text-amber-600">¥${totalPrice}</div></div>
+                <div class="p-4 bg-green-50 rounded-lg"><div class="font-medium">捆绑价（85折）</div><div class="text-2xl font-bold text-green-600">¥${bundlePrice}</div><div class="text-xs text-gray-500">利润 ¥${bundleProfit}</div></div>
+                <div class="p-4 bg-indigo-50 rounded-lg"><div class="font-medium">捆绑利润率</div><div class="text-2xl font-bold text-indigo-600">${Math.round(bundleProfit/bundlePrice*100)}%</div></div>
+                <div class="text-xs text-gray-500 mt-2"><i class="fa fa-lightbulb-o"></i> 捆绑折扣建议：10-20%折让可提升购买意愿，同时整体利润率仍高于单品。</div>
+            `;
+
+            const avgPrice = totalPrice / bundleProducts.length;
+            const avgCost = totalCost / bundleProducts.length;
+            tierDiv.innerHTML = `
+                <div class="bg-gray-50 rounded-xl p-4 border border-gray-200"><div class="font-bold text-gray-600 mb-2">基础版</div><div class="text-2xl font-bold text-gray-500">¥${Math.round(avgCost * 1.2)}</div><div class="text-xs text-gray-400 mt-2">覆盖成本，吸引入门用户</div></div>
+                <div class="bg-amber-50 rounded-xl p-4 border-2 border-amber-500 relative"><div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded">推荐</div><div class="font-bold text-amber-600 mb-2">专业版</div><div class="text-2xl font-bold text-amber-600">¥${Math.round(avgPrice)}</div><div class="text-xs text-gray-500 mt-2">主流选择，贡献主要利润</div></div>
+                <div class="bg-purple-50 rounded-xl p-4 border border-purple-200"><div class="font-bold text-purple-600 mb-2">企业版</div><div class="text-2xl font-bold text-purple-600">¥${Math.round(totalPrice * 1.5)}</div><div class="text-xs text-gray-500 mt-2">凸显专业版价值</div></div>
+            `;
+        }
+
+        loadSavedInputs();
+        calculate();
+        renderPlans();
+    </script>
+</body>
+</html>
